@@ -67,7 +67,14 @@
   }
   .dj-card:hover .portrait, .dj-card.active .portrait{ opacity:0.85; }
   .dj-card:hover .portrait{ transform:scale(1.06); }
-  .dj-card.active .portrait{ border-color:rgba(255,255,255,0.9); box-shadow:0 0 0 1px rgba(255,255,255,0.9), 0 0 40px -6px rgba(255,255,255,0.9); }
+  .dj-card.active .portrait{
+    border-color:rgba(255,255,255,0.9);
+    animation: bubble-pulse 3.6s ease-in-out infinite;
+  }
+  @keyframes bubble-pulse{
+    0%, 100% { box-shadow:0 0 0 1px rgba(255,255,255,0.6), 0 0 22px -6px rgba(255,255,255,0.5); }
+    50% { box-shadow:0 0 0 1px rgba(255,255,255,1), 0 0 48px -4px rgba(255,255,255,0.95); }
+  }
   .initials{ font-weight:800; font-size:clamp(20px,2vw,30px); letter-spacing:0.02em; color:var(--fg); opacity:0.9; }
   svg.ring{ position:absolute; inset:-6px; width:calc(100% + 12px); height:calc(100% + 12px); transform:rotate(-90deg); opacity:0; transition:opacity .4s; }
   .dj-card.active svg.ring{ opacity:1; }
