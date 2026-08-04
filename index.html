@@ -189,7 +189,7 @@
   </main>
 </div>
 
-<audio id="player" crossorigin="anonymous" style="display:none;"></audio>
+<audio id="player" style="display:none;"></audio>
 <input type="file" id="fileInput" accept="audio/*">
 
 <div class="bottom-right-actions">
@@ -548,9 +548,9 @@ class App {
     this.gradientBackground.update(delta);
     // audio-reactive modulation
     const u = this.gradientBackground.uniforms;
-    u.uSpeed.value = Math.min(1.0, this.baseSpeed + smoothed.bass * 0.6);
-    u.uIntensity.value = this.baseIntensity + smoothed.mid * 0.9;
-    u.uGrainIntensity.value = this.baseGrain + smoothed.treble * 0.35;
+    u.uSpeed.value = this.baseSpeed;
+    u.uIntensity.value = this.baseIntensity;
+    u.uGrainIntensity.value = this.baseGrain;
   }
   render() {
     const delta = Math.min(this.clock.getDelta(), 0.1);
@@ -582,9 +582,6 @@ function rgbToHex(r,g,b) {
   return '#' + toHex(r) + toHex(g) + toHex(b);
 }
 
-let bands = { bass:0, mid:0, treble:0 };
-let smoothed = { bass:0, mid:0, treble:0 };
-
 let app;
 try {
   app = new App();
@@ -603,37 +600,7 @@ const DJS = [
 ];
 
 const player = document.getElementById('player');
-let audioCtx, analyser, freqData, sourceNode;
 let activeDJ = null;
-
-function ensureAudioGraph(){
-  if (audioCtx) return;
-  audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-  sourceNode = audioCtx.createMediaElementSource(player);
-  analyser = audioCtx.createAnalyser();
-  analyser.fftSize = 512;
-  analyser.smoothingTimeConstant = 0.75;
-  freqData = new Uint8Array(analyser.frequencyBinCount);
-  sourceNode.connect(analyser);
-  analyser.connect(audioCtx.destination);
-}
-function updateBands(){
-  if (!analyser) return;
-  analyser.getByteFrequencyData(freqData);
-  const n = freqData.length;
-  const bassEnd = Math.floor(n*0.12), midEnd = Math.floor(n*0.5);
-  let b=0,m=0,t=0;
-  for(let i=0;i<bassEnd;i++) b+=freqData[i];
-  for(let i=bassEnd;i<midEnd;i++) m+=freqData[i];
-  for(let i=midEnd;i<n;i++) t+=freqData[i];
-  bands.bass = b/(bassEnd*255);
-  bands.mid  = m/((midEnd-bassEnd)*255);
-  bands.treble = t/((n-midEnd)*255);
-  smoothed.bass   += (bands.bass   - smoothed.bass)   * 0.25;
-  smoothed.mid    += (bands.mid    - smoothed.mid)    * 0.2;
-  smoothed.treble += (bands.treble - smoothed.treble) * 0.3;
-}
-setInterval(updateBands, 16);
 
 const roster = document.getElementById('roster');
 const nowPlaying = document.getElementById('nowPlaying');
@@ -777,8 +744,6 @@ window.addEventListener('resize', ()=>{
 function clearActiveCards(){ document.querySelectorAll('.dj-card').forEach(c=>c.classList.remove('active')); }
 
 function selectDJ(dj, card){
-  ensureAudioGraph();
-  if(audioCtx.state === 'suspended') audioCtx.resume();
   if(dj.src){ loadAndPlay(dj, dj.src, card); }
   else { pendingDJ = { dj, card }; fileInput.click(); }
 }
@@ -795,6 +760,8 @@ fileInput.addEventListener('change', (e)=>{
 function loadAndPlay(dj, src, card, fileName){
   clearActiveCards();
   card.classList.add('active');
+  const circle = card.querySelector('circle');
+  if (circle) circle.setAttribute('stroke-dashoffset', 0);
   activeDJ = dj;
   player.src = src;
   player.currentTime = 0;
@@ -844,16 +811,6 @@ let scrubbing = false;
 playhead.addEventListener('mousedown', e=>{ scrubbing = true; seekFromEvent(e); });
 window.addEventListener('mousemove', e=>{ if (scrubbing) seekFromEvent(e); });
 window.addEventListener('mouseup', ()=>{ scrubbing = false; });
-
-function updateRing(){
-  if(!activeDJ) return;
-  const card = document.getElementById('card-'+activeDJ.id);
-  if(!card) return;
-  const circle = card.querySelector('circle');
-  const level = 0.15 + smoothed.bass*0.5 + smoothed.mid*0.35;
-  circle.setAttribute('stroke-dashoffset', 289 - 289*Math.min(1, level));
-}
-setInterval(updateRing, 33);
 
 /* ===========================================================
    PALETTE DESIGNER — 6 pickers matching uColor1..6
