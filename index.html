@@ -1,0 +1,930 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AQUASONIC — DJ Mixes</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@500;600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<style>
+  :root{
+    --bg: #0a0e27;
+    --fg: #f2efe9;
+    --dim: #8a8790;
+    --warn: #ffb400;
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  html,body{
+    width:100%; height:100%;
+    background:var(--bg);
+    color:var(--fg);
+    font-family:'Inter', sans-serif;
+    overflow:hidden;
+    cursor:auto;
+  }
+  #webGLApp{
+    position:fixed; top:0; left:0; width:100%; height:100%; z-index:1;
+  }
+  .noise-overlay{
+    position:fixed; inset:0; z-index:2; pointer-events:none;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.4'/%3E%3C/svg%3E");
+    opacity:0.04; mix-blend-mode:overlay;
+  }
+
+  .frame{
+    position:fixed; inset:0; z-index:3;
+    display:flex; flex-direction:column; justify-content:space-between;
+    padding: 5vh 6vw 12vh;
+    pointer-events:none;
+  }
+  header{ display:flex; justify-content:space-between; align-items:flex-start; }
+  .wordmark{
+    font-family:'Syne', sans-serif; font-weight:800;
+    font-size:clamp(28px, 4vw, 46px); letter-spacing:0.02em; line-height:0.9; text-transform:uppercase;
+  }
+  .wordmark span{ color:var(--dim); font-weight:400; display:block; font-size:0.32em; letter-spacing:0.25em; margin-top:6px; }
+  .status{ text-align:right; font-size:11px; letter-spacing:0.15em; text-transform:uppercase; color:var(--dim); line-height:1.8; }
+  .status b{ color:var(--fg); font-weight:600; }
+  .dot{ display:inline-block; width:6px; height:6px; border-radius:50%; background:var(--dim); margin-right:6px; transition:background .3s; }
+  .dot.live{ background:var(--warn); box-shadow:0 0 8px var(--warn); }
+
+  main{ display:flex; align-items:flex-end; gap:3vw; pointer-events:none; }
+  .roster{ position:fixed; inset:0; pointer-events:none; z-index:5; }
+
+  .dj-card{ position:absolute; left:0; top:0; width:clamp(96px,9.5vw,148px); cursor:auto; user-select:none; -webkit-tap-highlight-color:transparent; pointer-events:auto; }
+  .portrait{
+    width:100%; aspect-ratio:1/1; border-radius:50%; position:relative;
+    display:flex; align-items:center; justify-content:center;
+    background: rgba(255,255,255,0.08);
+    opacity:0.55;
+    border:1px solid rgba(255,255,255,0.14);
+    transition: transform .5s cubic-bezier(.16,1,.3,1), border-color .4s, opacity .4s;
+    overflow:hidden;
+  }
+  .dj-card:hover .portrait, .dj-card.active .portrait{ opacity:0.85; }
+  .dj-card:hover .portrait{ transform:scale(1.06); }
+  .dj-card.active .portrait{ border-color:var(--pc1); box-shadow:0 0 0 1px var(--pc1), 0 0 40px -6px var(--pc1); }
+  .initials{ font-weight:800; font-size:clamp(20px,2vw,30px); letter-spacing:0.02em; color:var(--fg); opacity:0.9; }
+  svg.ring{ position:absolute; inset:-6px; width:calc(100% + 12px); height:calc(100% + 12px); transform:rotate(-90deg); opacity:0; transition:opacity .4s; }
+  .dj-card.active svg.ring{ opacity:1; }
+  svg.ring circle{ fill:none; stroke:var(--pc1); stroke-width:1.6; stroke-linecap:round; }
+  .dj-name{ margin-top:12px; font-size:12px; letter-spacing:0.06em; text-transform:uppercase; font-weight:600; text-align:center; }
+  .dj-genre{ margin-top:2px; font-size:10px; letter-spacing:0.08em; text-transform:uppercase; color:var(--dim); }
+  .dj-card.active .dj-name{ color:var(--pc1); }
+
+  .now-playing{ pointer-events:auto; min-width:260px; max-width:30vw; }
+  .np-label{ font-size:10px; letter-spacing:0.2em; text-transform:uppercase; color:var(--dim); margin-bottom:10px; }
+  .np-title{ font-family:'Syne', sans-serif; font-size:clamp(18px,1.6vw,24px); font-weight:700; margin-bottom:4px; }
+  .np-sub{ font-size:12px; color:var(--dim); margin-bottom:16px; }
+  .np-controls{ display:flex; align-items:center; gap:14px; }
+  .play-btn{
+    width:38px; height:38px; border-radius:50%; border:1px solid rgba(255,255,255,0.3);
+    background:transparent; color:var(--fg); display:flex; align-items:center; justify-content:center;
+    cursor:auto; font-size:14px; transition:background .2s, border-color .2s;
+  }
+  .play-btn:hover{ background:rgba(255,255,255,0.08); border-color:var(--fg); }
+  .np-time{ font-size:11px; color:var(--dim); font-variant-numeric:tabular-nums; }
+
+  input[type=file]{ display:none; }
+
+  @media (hover:none){ body,.dj-card,.play-btn{ cursor:auto; } }
+
+  .bottom-right-actions{
+    position:fixed; bottom:2rem; right:2rem; z-index:100;
+    display:flex; align-items:center; gap:0.75rem; pointer-events:auto;
+  }
+  .toggle-adjuster-btn{
+    padding:0.7rem 1.3rem; background:rgba(255,255,255,0.08); border:1px solid rgba(255,255,255,0.25);
+    color:var(--fg); font-family:'Syne', sans-serif; font-size:0.75rem; font-weight:600;
+    letter-spacing:0.08em; text-transform:uppercase; cursor:auto; border-radius:8px;
+    backdrop-filter:blur(10px); transition:all .3s ease; pointer-events:auto;
+    display:inline-block; text-decoration:none;
+  }
+  .icon-btn{
+    width:44px; height:44px; padding:0; border-radius:50%;
+    display:flex; align-items:center; justify-content:center; font-size:17px;
+  }
+  .toggle-adjuster-btn:hover{ background:rgba(255,255,255,0.16); border-color:rgba(255,255,255,0.5); transform:translateY(-2px); }
+
+  .color-adjuster-panel{
+    position:fixed; bottom:2rem; right:2rem; z-index:100;
+    background:rgba(255,255,255,0.08); backdrop-filter:blur(20px); -webkit-backdrop-filter:blur(20px);
+    border:1px solid rgba(255,255,255,0.2); border-radius:16px; padding:1.5rem;
+    min-width:320px; max-width:380px; pointer-events:auto; box-shadow:0 8px 32px rgba(0,0,0,0.35);
+    display:none; max-height:80vh; overflow-y:auto;
+  }
+  .color-adjuster-panel.open{ display:block; }
+  .color-adjuster-header{ display:flex; justify-content:space-between; align-items:center; margin-bottom:1.25rem; padding-bottom:0.85rem; border-bottom:1px solid rgba(255,255,255,0.12); }
+  .color-adjuster-title{ font-family:'Syne', sans-serif; font-size:0.85rem; font-weight:700; letter-spacing:0.08em; text-transform:uppercase; }
+  .color-adjuster-sub{ font-size:11px; color:var(--dim); margin-top:2px; }
+  .color-adjuster-close{ background:none; border:none; color:var(--fg); font-size:1.3rem; cursor:auto; width:22px; height:22px; display:flex; align-items:center; justify-content:center; }
+  .color-picker-group{ margin-bottom:0.9rem; }
+  .color-picker-label{ font-size:0.75rem; font-weight:500; margin-bottom:0.35rem; color:var(--dim); }
+  .color-picker-wrapper{ display:flex; gap:0.5rem; align-items:center; }
+  .color-picker-input{ width:40px; height:32px; border:2px solid rgba(255,255,255,0.3); border-radius:8px; cursor:auto; background:none; padding:0; -webkit-appearance:none; appearance:none; }
+  .color-picker-input::-webkit-color-swatch-wrapper{ padding:0; }
+  .color-picker-input::-webkit-color-swatch{ border:none; border-radius:6px; }
+  .color-value-display{ flex:1; background:rgba(0,0,0,0.3); border:1px solid rgba(255,255,255,0.18); border-radius:6px; padding:0.4rem 0.55rem; font-family:monospace; font-size:0.7rem; letter-spacing:0.04em; color:var(--fg); }
+  .copy-btn{ background:rgba(255,255,255,0.1); border:1px solid rgba(255,255,255,0.28); border-radius:6px; padding:0.4rem 0.55rem; color:var(--fg); font-size:0.68rem; cursor:auto; transition:all .2s ease; }
+  .copy-btn:hover{ background:rgba(255,255,255,0.2); }
+  .copy-btn.copied{ background:rgba(76,175,80,0.35); border-color:rgba(76,175,80,0.5); }
+  .color-adjuster-actions{ margin-top:1rem; padding-top:0.85rem; border-top:1px solid rgba(255,255,255,0.12); }
+  .export-btn{ width:100%; background:rgba(255,255,255,0.14); border:1px solid rgba(255,255,255,0.3); border-radius:8px; padding:0.6rem; color:var(--fg); font-family:'Syne', sans-serif; font-size:0.75rem; font-weight:600; letter-spacing:0.06em; text-transform:uppercase; cursor:auto; transition:all .2s ease; }
+  .export-btn:hover{ background:rgba(255,255,255,0.24); transform:translateY(-2px); }
+
+  @media (max-width:720px){
+    main{ flex-direction:column; align-items:flex-start; gap:24px; }
+    .now-playing{ max-width:90vw; }
+  }
+
+  .playhead{
+    width:180px; height:6px; border-radius:3px; overflow:hidden;
+    background:rgba(255,255,255,0.18);
+    backdrop-filter:blur(6px); -webkit-backdrop-filter:blur(6px);
+    pointer-events:auto; cursor:auto; align-self:center;
+  }
+  .playhead-fill{
+    height:100%; width:0%; background:rgba(255,255,255,0.7);
+    transition:width .1s linear;
+  }
+  .playhead:hover{ height:9px; }
+  .playhead:hover .playhead-fill{ background:rgba(255,255,255,0.85); }
+</style>
+</head>
+<body>
+
+<div class="noise-overlay"></div>
+
+<div class="frame">
+  <header>
+    <div class="wordmark">Aquasonic<span>Live mix archive</span></div>
+    <div class="status">
+      <div><span class="dot" id="statusDot"></span><b id="statusText">Idle</b></div>
+      <div id="statusSub"></div>
+    </div>
+  </header>
+
+  <main>
+    <div class="roster" id="roster"></div>
+    <div class="now-playing" id="nowPlaying" style="display:none;">
+      <div class="np-label">Now playing</div>
+      <div class="np-title" id="npTitle">—</div>
+      <div class="np-sub" id="npSub">—</div>
+      <div class="np-controls">
+        <button class="play-btn" id="playBtn">▶</button>
+        <div class="np-time"><span id="npCurrent">0:00</span> / <span id="npDuration">0:00</span></div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<audio id="player" crossorigin="anonymous" style="display:none;"></audio>
+<input type="file" id="fileInput" accept="audio/*">
+
+<div class="bottom-right-actions">
+  <div class="playhead" id="playhead">
+    <div class="playhead-fill" id="playheadFill"></div>
+  </div>
+  <a class="toggle-adjuster-btn" id="subscribeBtn" href="https://mailchi.mp/511c6f8218b7/subscribe" target="_blank" rel="noopener noreferrer">Subscribe</a>
+  <a class="toggle-adjuster-btn" id="toggleAdjusterBtn" href="https://soundcloud.com/aquasonic-522858057" target="_blank" rel="noopener noreferrer">SoundCloud</a>
+</div>
+<div class="color-adjuster-panel" id="colorAdjusterPanel">
+  <div class="color-adjuster-header">
+    <div>
+      <div class="color-adjuster-title">Palette designer</div>
+      <div class="color-adjuster-sub">Live-tune, then copy into a DJ's colors</div>
+    </div>
+    <button class="color-adjuster-close" id="closeAdjusterBtn">×</button>
+  </div>
+  <div id="pickerHost"></div>
+  <div class="color-adjuster-actions">
+    <button class="export-btn" id="exportAllBtn">Export All Colors</button>
+  </div>
+</div>
+
+<script>
+/* ===========================================================
+   TouchTexture — mouse/touch ripple field, feeds the shader
+   as a distortion texture (from the provided implementation)
+=========================================================== */
+class TouchTexture {
+  constructor() {
+    this.size = 64;
+    this.width = this.height = this.size;
+    this.maxAge = 64;
+    this.radius = 0.25 * this.size;
+    this.speed = 1 / this.maxAge;
+    this.trail = [];
+    this.last = null;
+    this.initTexture();
+  }
+  initTexture() {
+    this.canvas = document.createElement("canvas");
+    this.canvas.width = this.width;
+    this.canvas.height = this.height;
+    this.ctx = this.canvas.getContext("2d");
+    this.ctx.fillStyle = "black";
+    this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+    this.texture = new THREE.Texture(this.canvas);
+  }
+  update() {
+    this.clear();
+    let speed = this.speed;
+    for (let i = this.trail.length - 1; i >= 0; i--) {
+      const point = this.trail[i];
+      let f = point.force * speed * (1 - point.age / this.maxAge);
+      point.x += point.vx * f;
+      point.y += point.vy * f;
+      point.age++;
+      if (point.age > this.maxAge) this.trail.splice(i, 1);
+      else this.drawPoint(point);
+    }
+    this.texture.needsUpdate = true;
+  }
+  clear() {
+    this.ctx.fillStyle = "black";
+    this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+  }
+  addTouch(point) {
+    let force = 0, vx = 0, vy = 0;
+    const last = this.last;
+    if (last) {
+      const dx = point.x - last.x, dy = point.y - last.y;
+      if (dx === 0 && dy === 0) return;
+      const dd = dx * dx + dy * dy;
+      let d = Math.sqrt(dd);
+      vx = dx / d; vy = dy / d;
+      force = Math.min(dd * 20000, 2.0);
+    }
+    this.last = { x: point.x, y: point.y };
+    this.trail.push({ x: point.x, y: point.y, age: 0, force, vx, vy });
+  }
+  drawPoint(point) {
+    const pos = { x: point.x * this.width, y: (1 - point.y) * this.height };
+    let intensity = 1;
+    if (point.age < this.maxAge * 0.3) intensity = Math.sin((point.age / (this.maxAge * 0.3)) * (Math.PI / 2));
+    else { const t = 1 - (point.age - this.maxAge * 0.3) / (this.maxAge * 0.7); intensity = -t * (t - 2); }
+    intensity *= point.force;
+    const radius = this.radius;
+    let color = `${((point.vx + 1) / 2) * 255}, ${((point.vy + 1) / 2) * 255}, ${intensity * 255}`;
+    let offset = this.size * 5;
+    this.ctx.shadowOffsetX = offset;
+    this.ctx.shadowOffsetY = offset;
+    this.ctx.shadowBlur = radius;
+    this.ctx.shadowColor = `rgba(${color},${0.2 * intensity})`;
+    this.ctx.beginPath();
+    this.ctx.fillStyle = "rgba(255,0,0,1)";
+    this.ctx.arc(pos.x - offset, pos.y - offset, radius, 0, Math.PI * 2);
+    this.ctx.fill();
+  }
+}
+
+/* ===========================================================
+   GradientBackground — the liquid gradient shader
+=========================================================== */
+class GradientBackground {
+  constructor(sceneManager) {
+    this.sceneManager = sceneManager;
+    this.mesh = null;
+    this.uniforms = {
+      uTime: { value: 0 },
+      uResolution: { value: new THREE.Vector2(window.innerWidth, window.innerHeight) },
+      uColor1: { value: new THREE.Vector3(0.945, 0.353, 0.133) },
+      uColor2: { value: new THREE.Vector3(0.039, 0.055, 0.153) },
+      uColor3: { value: new THREE.Vector3(0.945, 0.353, 0.133) },
+      uColor4: { value: new THREE.Vector3(0.039, 0.055, 0.153) },
+      uColor5: { value: new THREE.Vector3(0.945, 0.353, 0.133) },
+      uColor6: { value: new THREE.Vector3(0.039, 0.055, 0.153) },
+      uSpeed: { value: 1.2 },
+      uIntensity: { value: 1.8 },
+      uTouchTexture: { value: null },
+      uGrainIntensity: { value: 0.08 },
+      uZoom: { value: 1.0 },
+      uDarkNavy: { value: new THREE.Vector3(0.039, 0.055, 0.153) },
+      uGradientSize: { value: 0.45 },
+      uGradientCount: { value: 10.0 },
+      uColor1Weight: { value: 0.5 },
+      uColor2Weight: { value: 1.8 }
+    };
+  }
+  init() {
+    const viewSize = this.sceneManager.getViewSize();
+    const geometry = new THREE.PlaneGeometry(viewSize.width, viewSize.height, 1, 1);
+    const material = new THREE.ShaderMaterial({
+      uniforms: this.uniforms,
+      vertexShader: `
+        varying vec2 vUv;
+        void main() {
+          vec3 pos = position.xyz;
+          gl_Position = projectionMatrix * modelViewMatrix * vec4(pos, 1.);
+          vUv = uv;
+        }
+      `,
+      fragmentShader: `
+        uniform float uTime;
+        uniform vec2 uResolution;
+        uniform vec3 uColor1; uniform vec3 uColor2; uniform vec3 uColor3;
+        uniform vec3 uColor4; uniform vec3 uColor5; uniform vec3 uColor6;
+        uniform float uSpeed; uniform float uIntensity;
+        uniform sampler2D uTouchTexture;
+        uniform float uGrainIntensity; uniform float uZoom;
+        uniform vec3 uDarkNavy;
+        uniform float uGradientSize; uniform float uGradientCount;
+        uniform float uColor1Weight; uniform float uColor2Weight;
+        varying vec2 vUv;
+        #define PI 3.14159265359
+
+        float grain(vec2 uv, float time) {
+          vec2 grainUv = uv * uResolution * 0.5;
+          float grainValue = fract(sin(dot(grainUv + time, vec2(12.9898, 78.233))) * 43758.5453);
+          return grainValue * 2.0 - 1.0;
+        }
+
+        vec3 getGradientColor(vec2 uv, float time) {
+          float gradientRadius = uGradientSize;
+          vec2 center1 = vec2(0.5 + sin(time * uSpeed * 0.4) * 0.4, 0.5 + cos(time * uSpeed * 0.5) * 0.4);
+          vec2 center2 = vec2(0.5 + cos(time * uSpeed * 0.6) * 0.5, 0.5 + sin(time * uSpeed * 0.45) * 0.5);
+          vec2 center3 = vec2(0.5 + sin(time * uSpeed * 0.35) * 0.45, 0.5 + cos(time * uSpeed * 0.55) * 0.45);
+          vec2 center4 = vec2(0.5 + cos(time * uSpeed * 0.5) * 0.4, 0.5 + sin(time * uSpeed * 0.4) * 0.4);
+          vec2 center5 = vec2(0.5 + sin(time * uSpeed * 0.7) * 0.35, 0.5 + cos(time * uSpeed * 0.6) * 0.35);
+          vec2 center6 = vec2(0.5 + cos(time * uSpeed * 0.45) * 0.5, 0.5 + sin(time * uSpeed * 0.65) * 0.5);
+          vec2 center7 = vec2(0.5 + sin(time * uSpeed * 0.55) * 0.38, 0.5 + cos(time * uSpeed * 0.48) * 0.42);
+          vec2 center8 = vec2(0.5 + cos(time * uSpeed * 0.65) * 0.36, 0.5 + sin(time * uSpeed * 0.52) * 0.44);
+          vec2 center9 = vec2(0.5 + sin(time * uSpeed * 0.42) * 0.41, 0.5 + cos(time * uSpeed * 0.58) * 0.39);
+          vec2 center10 = vec2(0.5 + cos(time * uSpeed * 0.48) * 0.37, 0.5 + sin(time * uSpeed * 0.62) * 0.43);
+          vec2 center11 = vec2(0.5 + sin(time * uSpeed * 0.68) * 0.33, 0.5 + cos(time * uSpeed * 0.44) * 0.46);
+          vec2 center12 = vec2(0.5 + cos(time * uSpeed * 0.38) * 0.39, 0.5 + sin(time * uSpeed * 0.56) * 0.41);
+
+          float dist1=length(uv-center1); float dist2=length(uv-center2); float dist3=length(uv-center3);
+          float dist4=length(uv-center4); float dist5=length(uv-center5); float dist6=length(uv-center6);
+          float dist7=length(uv-center7); float dist8=length(uv-center8); float dist9=length(uv-center9);
+          float dist10=length(uv-center10); float dist11=length(uv-center11); float dist12=length(uv-center12);
+
+          float influence1=1.0-smoothstep(0.0,gradientRadius,dist1);
+          float influence2=1.0-smoothstep(0.0,gradientRadius,dist2);
+          float influence3=1.0-smoothstep(0.0,gradientRadius,dist3);
+          float influence4=1.0-smoothstep(0.0,gradientRadius,dist4);
+          float influence5=1.0-smoothstep(0.0,gradientRadius,dist5);
+          float influence6=1.0-smoothstep(0.0,gradientRadius,dist6);
+          float influence7=1.0-smoothstep(0.0,gradientRadius,dist7);
+          float influence8=1.0-smoothstep(0.0,gradientRadius,dist8);
+          float influence9=1.0-smoothstep(0.0,gradientRadius,dist9);
+          float influence10=1.0-smoothstep(0.0,gradientRadius,dist10);
+          float influence11=1.0-smoothstep(0.0,gradientRadius,dist11);
+          float influence12=1.0-smoothstep(0.0,gradientRadius,dist12);
+
+          vec2 rotatedUv1 = uv - 0.5;
+          float angle1 = time * uSpeed * 0.15;
+          rotatedUv1 = vec2(rotatedUv1.x*cos(angle1)-rotatedUv1.y*sin(angle1), rotatedUv1.x*sin(angle1)+rotatedUv1.y*cos(angle1));
+          rotatedUv1 += 0.5;
+          vec2 rotatedUv2 = uv - 0.5;
+          float angle2 = -time * uSpeed * 0.12;
+          rotatedUv2 = vec2(rotatedUv2.x*cos(angle2)-rotatedUv2.y*sin(angle2), rotatedUv2.x*sin(angle2)+rotatedUv2.y*cos(angle2));
+          rotatedUv2 += 0.5;
+          float radialGradient1 = length(rotatedUv1 - 0.5);
+          float radialGradient2 = length(rotatedUv2 - 0.5);
+          float radialInfluence1 = 1.0 - smoothstep(0.0, 0.8, radialGradient1);
+          float radialInfluence2 = 1.0 - smoothstep(0.0, 0.8, radialGradient2);
+
+          vec3 color = vec3(0.0);
+          color += uColor1 * influence1 * (0.55 + 0.45 * sin(time * uSpeed)) * uColor1Weight;
+          color += uColor2 * influence2 * (0.55 + 0.45 * cos(time * uSpeed * 1.2)) * uColor2Weight;
+          color += uColor3 * influence3 * (0.55 + 0.45 * sin(time * uSpeed * 0.8)) * uColor1Weight;
+          color += uColor4 * influence4 * (0.55 + 0.45 * cos(time * uSpeed * 1.3)) * uColor2Weight;
+          color += uColor5 * influence5 * (0.55 + 0.45 * sin(time * uSpeed * 1.1)) * uColor1Weight;
+          color += uColor6 * influence6 * (0.55 + 0.45 * cos(time * uSpeed * 0.9)) * uColor2Weight;
+
+          if (uGradientCount > 6.0) {
+            color += uColor1 * influence7 * (0.55 + 0.45 * sin(time * uSpeed * 1.4)) * uColor1Weight;
+            color += uColor2 * influence8 * (0.55 + 0.45 * cos(time * uSpeed * 1.5)) * uColor2Weight;
+            color += uColor3 * influence9 * (0.55 + 0.45 * sin(time * uSpeed * 1.6)) * uColor1Weight;
+            color += uColor4 * influence10 * (0.55 + 0.45 * cos(time * uSpeed * 1.7)) * uColor2Weight;
+          }
+          if (uGradientCount > 10.0) {
+            color += uColor5 * influence11 * (0.55 + 0.45 * sin(time * uSpeed * 1.8)) * uColor1Weight;
+            color += uColor6 * influence12 * (0.55 + 0.45 * cos(time * uSpeed * 1.9)) * uColor2Weight;
+          }
+
+          color += mix(uColor1, uColor3, radialInfluence1) * 0.45 * uColor1Weight;
+          color += mix(uColor2, uColor4, radialInfluence2) * 0.4 * uColor2Weight;
+
+          color = clamp(color, vec3(0.0), vec3(1.0)) * uIntensity;
+          float luminance = dot(color, vec3(0.299, 0.587, 0.114));
+          color = mix(vec3(luminance), color, 1.35);
+          color = pow(color, vec3(0.92));
+
+          float brightness1 = length(color);
+          float mixFactor1 = max(brightness1 * 1.2, 0.15);
+          color = mix(uDarkNavy, color, mixFactor1);
+
+          float maxBrightness = 1.0;
+          float brightness = length(color);
+          if (brightness > maxBrightness) color = color * (maxBrightness / brightness);
+          return color;
+        }
+
+        void main() {
+          vec2 uv = vUv;
+          vec4 touchTex = texture2D(uTouchTexture, uv);
+          float vx = -(touchTex.r * 2.0 - 1.0);
+          float vy = -(touchTex.g * 2.0 - 1.0);
+          float intensity = touchTex.b;
+          uv.x += vx * 0.8 * intensity;
+          uv.y += vy * 0.8 * intensity;
+
+          vec2 center = vec2(0.5);
+          float dist = length(uv - center);
+          float ripple = sin(dist * 20.0 - uTime * 3.0) * 0.04 * intensity;
+          float wave = sin(dist * 15.0 - uTime * 2.0) * 0.03 * intensity;
+          uv += vec2(ripple + wave);
+
+          vec3 color = getGradientColor(uv, uTime);
+          float grainValue = grain(uv, uTime);
+          color += grainValue * uGrainIntensity;
+
+          float timeShift = uTime * 0.5;
+          color.r += sin(timeShift) * 0.02;
+          color.g += cos(timeShift * 1.4) * 0.02;
+          color.b += sin(timeShift * 1.2) * 0.02;
+
+          float brightness2 = length(color);
+          float mixFactor2 = max(brightness2 * 1.2, 0.15);
+          color = mix(uDarkNavy, color, mixFactor2);
+          color = clamp(color, vec3(0.0), vec3(1.0));
+
+          float maxBrightness = 1.0;
+          float brightness = length(color);
+          if (brightness > maxBrightness) color = color * (maxBrightness / brightness);
+          gl_FragColor = vec4(color, 1.0);
+        }
+      `
+    });
+    this.mesh = new THREE.Mesh(geometry, material);
+    this.mesh.position.z = 0;
+    this.sceneManager.scene.add(this.mesh);
+  }
+  update(delta) { if (this.uniforms.uTime) this.uniforms.uTime.value += delta; }
+  onResize(width, height) {
+    const viewSize = this.sceneManager.getViewSize();
+    if (this.mesh) {
+      this.mesh.geometry.dispose();
+      this.mesh.geometry = new THREE.PlaneGeometry(viewSize.width, viewSize.height, 1, 1);
+    }
+    if (this.uniforms.uResolution) this.uniforms.uResolution.value.set(width, height);
+  }
+}
+
+/* ===========================================================
+   App — scene/camera/render loop + audio-reactive modulation
+=========================================================== */
+class App {
+  constructor() {
+    this.renderer = new THREE.WebGLRenderer({ antialias:true, powerPreference:"high-performance", alpha:false, stencil:false, depth:false });
+    this.renderer.setSize(window.innerWidth, window.innerHeight);
+    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5));
+    document.body.appendChild(this.renderer.domElement);
+    this.renderer.domElement.id = "webGLApp";
+
+    this.camera = new THREE.PerspectiveCamera(45, window.innerWidth/window.innerHeight, 0.1, 10000);
+    this.camera.position.z = 50;
+    this.scene = new THREE.Scene();
+    this.scene.background = new THREE.Color(0x0a0e27);
+    this.clock = new THREE.Clock();
+
+    this.touchTexture = new TouchTexture();
+    this.gradientBackground = new GradientBackground(this);
+    this.gradientBackground.uniforms.uTouchTexture.value = this.touchTexture.texture;
+
+    this.baseSpeed = 0.5;
+    this.baseIntensity = 1.8;
+    this.baseGrain = 0.08;
+    this._frameInterval = 1000 / 30;
+    this._lastFrame = 0;
+
+    this.init();
+  }
+
+  setDJColors(c1hex, c2hex, c3hex) {
+    const u = this.gradientBackground.uniforms;
+    const c1 = hexToRgb(c1hex), c2 = hexToRgb(c2hex), c3 = hexToRgb(c3hex || c1hex);
+    u.uColor1.value.set(c1.r, c1.g, c1.b);
+    u.uColor2.value.set(c2.r, c2.g, c2.b);
+    u.uColor3.value.set(c3.r, c3.g, c3.b);
+    u.uColor4.value.set(c2.r, c2.g, c2.b);
+    u.uColor5.value.set(c1.r, c1.g, c1.b);
+    u.uColor6.value.set(c2.r, c2.g, c2.b);
+  }
+
+  init() {
+    this.gradientBackground.init();
+    this.setDJColors('#3a3a55', '#0a0e27', '#3a3a55');
+    this.render();
+    this.tick();
+    window.addEventListener("resize", () => this.onResize());
+    window.addEventListener("mousemove", (ev) => this.onMouseMove(ev));
+    window.addEventListener("touchmove", (ev) => this.onTouchMove(ev));
+    document.addEventListener("visibilitychange", () => { if (!document.hidden) this.render(); });
+  }
+  onTouchMove(ev) { const touch = ev.touches[0]; this.onMouseMove({ clientX: touch.clientX, clientY: touch.clientY }); }
+  onMouseMove(ev) {
+    this.mouse = { x: ev.clientX / window.innerWidth, y: 1 - ev.clientY / window.innerHeight };
+    this.touchTexture.addTouch(this.mouse);
+  }
+  getViewSize() {
+    const fovInRadians = (this.camera.fov * Math.PI) / 180;
+    const height = Math.abs(this.camera.position.z * Math.tan(fovInRadians / 2) * 2);
+    return { width: height * this.camera.aspect, height };
+  }
+  update(delta) {
+    this.touchTexture.update();
+    this.gradientBackground.update(delta);
+    // audio-reactive modulation
+    const u = this.gradientBackground.uniforms;
+    u.uSpeed.value = this.baseSpeed + smoothed.bass * 2.2;
+    u.uIntensity.value = this.baseIntensity + smoothed.mid * 0.9;
+    u.uGrainIntensity.value = this.baseGrain + smoothed.treble * 0.35;
+  }
+  render() {
+    const delta = Math.min(this.clock.getDelta(), 0.1);
+    this.renderer.render(this.scene, this.camera);
+    this.update(delta);
+  }
+  tick() {
+    const now = performance.now();
+    if (now - this._lastFrame >= this._frameInterval) {
+      this._lastFrame = now;
+      this.render();
+    }
+    requestAnimationFrame(() => this.tick());
+  }
+  onResize() {
+    this.camera.aspect = window.innerWidth / window.innerHeight;
+    this.camera.updateProjectionMatrix();
+    this.renderer.setSize(window.innerWidth, window.innerHeight);
+    this.gradientBackground.onResize(window.innerWidth, window.innerHeight);
+  }
+}
+
+function hexToRgb(hex) {
+  const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+  return result ? { r: parseInt(result[1],16)/255, g: parseInt(result[2],16)/255, b: parseInt(result[3],16)/255 } : { r:0,g:0,b:0 };
+}
+function rgbToHex(r,g,b) {
+  const toHex = n => { const h = Math.round(n*255).toString(16); return h.length===1 ? '0'+h : h; };
+  return '#' + toHex(r) + toHex(g) + toHex(b);
+}
+
+let bands = { bass:0, mid:0, treble:0 };
+let smoothed = { bass:0, mid:0, treble:0 };
+
+let app;
+try {
+  app = new App();
+} catch(err) {
+  console.error('WebGL background failed to initialize:', err);
+}
+
+/* ===========================================================
+   DJ ROSTER + AUDIO ENGINE
+=========================================================== */
+const DJS = [
+  { id:'aria', name:'RAFA',   genre:'Melodic Techno', c1:'#ff3d6e', c2:'#7a1030', c3:'#ff8fa8', src:'https://pub-f4b3636d4711466b9b6c4524a4eaa6be.r2.dev/Rafa%20Set.mp3' },
+  { id:'kova', name:'Nema Hän',        genre:'Deep House',     c1:'#24e0c9', c2:'#0a4f47', c3:'#8ff5e8', src:'' },
+  { id:'ren',  name:'Eva Loveless',  genre:'Ambient / IDM',  c1:'#7a5cff', c2:'#241a5e', c3:'#b8a8ff', src:'' },
+  { id:'juno', name:'Currency Audio',genre:'UK Garage',      c1:'#ffb400', c2:'#5e4200', c3:'#ffd980', src:'' },
+];
+
+const player = document.getElementById('player');
+let audioCtx, analyser, freqData, sourceNode;
+let activeDJ = null;
+
+function ensureAudioGraph(){
+  if (audioCtx) return;
+  audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  sourceNode = audioCtx.createMediaElementSource(player);
+  analyser = audioCtx.createAnalyser();
+  analyser.fftSize = 512;
+  analyser.smoothingTimeConstant = 0.75;
+  freqData = new Uint8Array(analyser.frequencyBinCount);
+  sourceNode.connect(analyser);
+  analyser.connect(audioCtx.destination);
+}
+function updateBands(){
+  if (!analyser) return;
+  analyser.getByteFrequencyData(freqData);
+  const n = freqData.length;
+  const bassEnd = Math.floor(n*0.12), midEnd = Math.floor(n*0.5);
+  let b=0,m=0,t=0;
+  for(let i=0;i<bassEnd;i++) b+=freqData[i];
+  for(let i=bassEnd;i<midEnd;i++) m+=freqData[i];
+  for(let i=midEnd;i<n;i++) t+=freqData[i];
+  bands.bass = b/(bassEnd*255);
+  bands.mid  = m/((midEnd-bassEnd)*255);
+  bands.treble = t/((n-midEnd)*255);
+  smoothed.bass   += (bands.bass   - smoothed.bass)   * 0.25;
+  smoothed.mid    += (bands.mid    - smoothed.mid)    * 0.2;
+  smoothed.treble += (bands.treble - smoothed.treble) * 0.3;
+}
+setInterval(updateBands, 16);
+
+const roster = document.getElementById('roster');
+const nowPlaying = document.getElementById('nowPlaying');
+const npTitle = document.getElementById('npTitle');
+const npSub = document.getElementById('npSub');
+const npCurrent = document.getElementById('npCurrent');
+const npDuration = document.getElementById('npDuration');
+const playhead = document.getElementById('playhead');
+const playheadFill = document.getElementById('playheadFill');
+const playBtn = document.getElementById('playBtn');
+const statusDot = document.getElementById('statusDot');
+const statusText = document.getElementById('statusText');
+const statusSub = document.getElementById('statusSub');
+const fileInput = document.getElementById('fileInput');
+let pendingDJ = null;
+
+DJS.forEach(dj=>{
+  const card = document.createElement('div');
+  card.className = 'dj-card';
+  card.id = 'card-'+dj.id;
+  card.style.setProperty('--pc1', dj.c1);
+  card.style.setProperty('--pc2', dj.c2);
+  card.innerHTML = `
+    <div class="portrait">
+      <svg class="ring" viewBox="0 0 100 100"><circle cx="50" cy="50" r="46" stroke-dasharray="289" stroke-dashoffset="289"></circle></svg>
+    </div>
+    <div class="dj-name">${dj.name}</div>
+  `;
+  card.addEventListener('click', ()=> selectDJ(dj, card));
+  roster.appendChild(card);
+});
+
+/* ===========================================================
+   FLOATING BUBBLES — drift around the screen, bounce off edges,
+   each other, and other UI elements
+=========================================================== */
+const floatState = [];
+function initFloating(){
+  const cards = Array.from(document.querySelectorAll('.dj-card'));
+  const vw = window.innerWidth, vh = window.innerHeight;
+  cards.forEach(card=>{
+    const w = card.offsetWidth || 120, h = card.offsetHeight || 150;
+    const x = Math.random() * Math.max(1, vw - w - 80) + 40;
+    const y = Math.random() * Math.max(1, vh - h - 280) + 140;
+    const angle = Math.random() * Math.PI * 2;
+    const speed = 14 + Math.random() * 10; // px/sec — slow drift
+    floatState.push({ card, x, y, vx: Math.cos(angle)*speed, vy: Math.sin(angle)*speed });
+    card.style.left = x + 'px';
+    card.style.top = y + 'px';
+  });
+}
+
+function getFloatObstacles(){
+  const obstacles = [];
+  const headerEl = document.querySelector('header');
+  if (headerEl) obstacles.push(headerEl.getBoundingClientRect());
+  const actionsEl = document.querySelector('.bottom-right-actions');
+  if (actionsEl) obstacles.push(actionsEl.getBoundingClientRect());
+  if (nowPlaying && getComputedStyle(nowPlaying).display !== 'none'){
+    obstacles.push(nowPlaying.getBoundingClientRect());
+  }
+  return obstacles;
+}
+
+let lastFloatTime = null;
+function animateFloating(now){
+  if (lastFloatTime == null) lastFloatTime = now;
+  let dt = (now - lastFloatTime) / 1000;
+  lastFloatTime = now;
+  dt = Math.min(dt, 0.05);
+
+  const vw = window.innerWidth, vh = window.innerHeight;
+  const obstacles = getFloatObstacles();
+
+  floatState.forEach(s=>{
+    s.x += s.vx * dt;
+    s.y += s.vy * dt;
+    const w = s.card.offsetWidth, h = s.card.offsetHeight;
+
+    if (s.x < 0){ s.x = 0; s.vx *= -1; }
+    if (s.x + w > vw){ s.x = vw - w; s.vx *= -1; }
+    if (s.y < 0){ s.y = 0; s.vy *= -1; }
+    if (s.y + h > vh){ s.y = vh - h; s.vy *= -1; }
+
+    obstacles.forEach(o=>{
+      const overlapX = Math.min(s.x+w, o.right) - Math.max(s.x, o.left);
+      const overlapY = Math.min(s.y+h, o.bottom) - Math.max(s.y, o.top);
+      if (overlapX > 0 && overlapY > 0){
+        if (overlapX < overlapY){
+          s.vx *= -1;
+          s.x += (s.x < o.left ? -overlapX : overlapX);
+        } else {
+          s.vy *= -1;
+          s.y += (s.y < o.top ? -overlapY : overlapY);
+        }
+      }
+    });
+  });
+
+  for (let i=0; i<floatState.length; i++){
+    for (let j=i+1; j<floatState.length; j++){
+      const a = floatState[i], b = floatState[j];
+      const aw = a.card.offsetWidth, ah = a.card.offsetHeight;
+      const bw = b.card.offsetWidth, bh = b.card.offsetHeight;
+      const acx = a.x+aw/2, acy = a.y+ah/2;
+      const bcx = b.x+bw/2, bcy = b.y+bh/2;
+      const dx = bcx-acx, dy = bcy-acy;
+      const dist = Math.sqrt(dx*dx+dy*dy) || 0.001;
+      const minDist = (aw+bw)/2 * 0.9;
+      if (dist < minDist){
+        const nx = dx/dist, ny = dy/dist;
+        const avn = a.vx*nx + a.vy*ny;
+        const bvn = b.vx*nx + b.vy*ny;
+        a.vx += (bvn-avn)*nx; a.vy += (bvn-avn)*ny;
+        b.vx += (avn-bvn)*nx; b.vy += (avn-bvn)*ny;
+        const overlap = minDist - dist;
+        a.x -= nx*overlap/2; a.y -= ny*overlap/2;
+        b.x += nx*overlap/2; b.y += ny*overlap/2;
+      }
+    }
+  }
+
+  floatState.forEach(s=>{
+    s.card.style.left = s.x + 'px';
+    s.card.style.top = s.y + 'px';
+  });
+
+  requestAnimationFrame(animateFloating);
+}
+
+initFloating();
+requestAnimationFrame(animateFloating);
+
+window.addEventListener('resize', ()=>{
+  const vw = window.innerWidth, vh = window.innerHeight;
+  floatState.forEach(s=>{
+    const w = s.card.offsetWidth, h = s.card.offsetHeight;
+    s.x = Math.min(Math.max(0, s.x), Math.max(0, vw-w));
+    s.y = Math.min(Math.max(0, s.y), Math.max(0, vh-h));
+  });
+});
+
+function clearActiveCards(){ document.querySelectorAll('.dj-card').forEach(c=>c.classList.remove('active')); }
+
+function selectDJ(dj, card){
+  ensureAudioGraph();
+  if(audioCtx.state === 'suspended') audioCtx.resume();
+  if(dj.src){ loadAndPlay(dj, dj.src, card); }
+  else { pendingDJ = { dj, card }; fileInput.click(); }
+}
+
+fileInput.addEventListener('change', (e)=>{
+  const file = e.target.files[0];
+  if(!file || !pendingDJ) return;
+  const url = URL.createObjectURL(file);
+  loadAndPlay(pendingDJ.dj, url, pendingDJ.card, file.name);
+  pendingDJ = null;
+  fileInput.value = '';
+});
+
+function loadAndPlay(dj, src, card, fileName){
+  clearActiveCards();
+  card.classList.add('active');
+  activeDJ = dj;
+  player.src = src;
+  player.currentTime = 0;
+  playheadFill.style.width = '0%';
+  player.play().catch(err=>{
+    console.error('Playback failed:', err);
+    statusText.textContent = 'Error';
+    statusSub.textContent = err && err.message ? err.message : 'Playback failed';
+  });
+  nowPlaying.style.display = 'block';
+  npTitle.textContent = dj.name;
+  npSub.textContent = fileName ? fileName.replace(/\.[^/.]+$/,'') : '';
+  playBtn.textContent = '⏸';
+  statusDot.classList.add('live');
+  statusText.textContent = 'Live';
+  statusSub.textContent = dj.name;
+}
+
+playBtn.addEventListener('click', ()=>{
+  if(!player.src) return;
+  if(player.paused){ player.play(); playBtn.textContent='⏸'; statusDot.classList.add('live'); statusText.textContent='Live'; }
+  else { player.pause(); playBtn.textContent='▶'; statusDot.classList.remove('live'); statusText.textContent='Paused'; }
+});
+player.addEventListener('ended', ()=>{
+  playBtn.textContent = '▶'; statusDot.classList.remove('live'); statusText.textContent = 'Idle';
+  statusSub.textContent = '';
+  playheadFill.style.width = '0%';
+});
+function fmt(t){ if(!isFinite(t)) return '0:00'; const m=Math.floor(t/60), s=Math.floor(t%60); return m+':'+String(s).padStart(2,'0'); }
+player.addEventListener('timeupdate', ()=>{
+  npCurrent.textContent = fmt(player.currentTime);
+  npDuration.textContent = fmt(player.duration);
+  if (isFinite(player.duration) && player.duration > 0) {
+    playheadFill.style.width = (player.currentTime / player.duration * 100) + '%';
+  }
+});
+
+function seekFromEvent(e){
+  if (!isFinite(player.duration) || player.duration <= 0) return;
+  const rect = playhead.getBoundingClientRect();
+  const ratio = Math.min(1, Math.max(0, (e.clientX - rect.left) / rect.width));
+  player.currentTime = ratio * player.duration;
+}
+playhead.addEventListener('click', seekFromEvent);
+let scrubbing = false;
+playhead.addEventListener('mousedown', e=>{ scrubbing = true; seekFromEvent(e); });
+window.addEventListener('mousemove', e=>{ if (scrubbing) seekFromEvent(e); });
+window.addEventListener('mouseup', ()=>{ scrubbing = false; });
+
+function updateRing(){
+  if(!activeDJ) return;
+  const card = document.getElementById('card-'+activeDJ.id);
+  if(!card) return;
+  const circle = card.querySelector('circle');
+  const level = 0.15 + smoothed.bass*0.5 + smoothed.mid*0.35;
+  circle.setAttribute('stroke-dashoffset', 289 - 289*Math.min(1, level));
+}
+setInterval(updateRing, 33);
+
+/* ===========================================================
+   PALETTE DESIGNER — 6 pickers matching uColor1..6
+=========================================================== */
+let adjusterActive = false;
+const adjusterPanel = document.getElementById('colorAdjusterPanel');
+const toggleAdjusterBtn = document.getElementById('toggleAdjusterBtn');
+const closeAdjusterBtn = document.getElementById('closeAdjusterBtn');
+const pickerHost = document.getElementById('pickerHost');
+
+const pickerLabels = ['Color 1','Color 2','Color 3','Color 4','Color 5','Color 6'];
+pickerLabels.forEach((label, idx)=>{
+  const n = idx+1;
+  const group = document.createElement('div');
+  group.className = 'color-picker-group';
+  group.innerHTML = `
+    <div class="color-picker-label">${label}</div>
+    <div class="color-picker-wrapper">
+      <input type="color" class="color-picker-input" id="colorPicker${n}">
+      <input type="text" class="color-value-display" id="colorValue${n}" readonly>
+      <button class="copy-btn" data-copy="${n}">Copy</button>
+    </div>`;
+  pickerHost.appendChild(group);
+});
+
+function updateColorPickersFromScheme(){
+  const u = app.gradientBackground.uniforms;
+  const colors = [u.uColor1.value,u.uColor2.value,u.uColor3.value,u.uColor4.value,u.uColor5.value,u.uColor6.value];
+  colors.forEach((c,i)=>{
+    const hex = rgbToHex(c.x,c.y,c.z);
+    document.getElementById('colorPicker'+(i+1)).value = hex;
+    document.getElementById('colorValue'+(i+1)).value = hex.toUpperCase();
+  });
+}
+
+closeAdjusterBtn.addEventListener('click', ()=>{
+  adjusterActive = false;
+  adjusterPanel.classList.remove('open');
+  if (app) app.setDJColors('#3a3a55', '#0a0e27', '#3a3a55');
+});
+
+for (let i=1;i<=6;i++){
+  const picker = document.getElementById('colorPicker'+i);
+  const display = document.getElementById('colorValue'+i);
+  picker.addEventListener('input', e=>{
+    const rgb = hexToRgb(e.target.value);
+    app.gradientBackground.uniforms['uColor'+i].value.set(rgb.r, rgb.g, rgb.b);
+    display.value = e.target.value.toUpperCase();
+  });
+}
+document.querySelectorAll('.copy-btn').forEach(btn=>{
+  btn.addEventListener('click', e=>{
+    const idx = e.target.dataset.copy;
+    const text = document.getElementById('colorValue'+idx).value;
+    navigator.clipboard.writeText(text).catch(()=>{});
+    e.target.textContent = 'Copied!';
+    e.target.classList.add('copied');
+    setTimeout(()=>{ e.target.textContent='Copy'; e.target.classList.remove('copied'); }, 1500);
+  });
+});
+document.getElementById('exportAllBtn').addEventListener('click', ()=>{
+  const colors = [];
+  for (let i=1;i<=6;i++) colors.push(document.getElementById('colorValue'+i).value);
+  const snippet = `{ id:'new-dj', name:'New DJ', genre:'Genre', c1:'${colors[0]}', c2:'${colors[1]}', c3:'${colors[2]}', src:'' }`;
+  navigator.clipboard.writeText(snippet).catch(()=>{});
+  const btn = document.getElementById('exportAllBtn');
+  const original = btn.textContent;
+  btn.textContent = 'Copied to clipboard';
+  setTimeout(()=>{ btn.textContent = original; }, 1500);
+});
+
+/* ===========================================================
+   (custom cursor removed — using default OS cursor)
+=========================================================== */
+
+</script>
+</body>
+</html>
