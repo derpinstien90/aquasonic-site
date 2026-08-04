@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -66,25 +67,30 @@
   }
   .dj-card:hover .portrait, .dj-card.active .portrait{ opacity:0.85; }
   .dj-card:hover .portrait{ transform:scale(1.06); }
-  .dj-card.active .portrait{ border-color:var(--pc1); box-shadow:0 0 0 1px var(--pc1), 0 0 40px -6px var(--pc1); }
+  .dj-card.active .portrait{ border-color:rgba(255,255,255,0.9); box-shadow:0 0 0 1px rgba(255,255,255,0.9), 0 0 40px -6px rgba(255,255,255,0.9); }
   .initials{ font-weight:800; font-size:clamp(20px,2vw,30px); letter-spacing:0.02em; color:var(--fg); opacity:0.9; }
   svg.ring{ position:absolute; inset:-6px; width:calc(100% + 12px); height:calc(100% + 12px); transform:rotate(-90deg); opacity:0; transition:opacity .4s; }
   .dj-card.active svg.ring{ opacity:1; }
-  svg.ring circle{ fill:none; stroke:var(--pc1); stroke-width:1.6; stroke-linecap:round; }
+  svg.ring circle{ fill:none; stroke:rgba(255,255,255,0.9); stroke-width:1.6; stroke-linecap:round; }
   .dj-name{ margin-top:12px; font-size:12px; letter-spacing:0.06em; text-transform:uppercase; font-weight:600; text-align:center; }
   .dj-genre{ margin-top:2px; font-size:10px; letter-spacing:0.08em; text-transform:uppercase; color:var(--dim); }
-  .dj-card.active .dj-name{ color:var(--pc1); }
 
-  .now-playing{ pointer-events:auto; min-width:260px; max-width:30vw; }
+  .now-playing{ pointer-events:auto; min-width:260px; max-width:30vw; margin-bottom:calc(2rem - 12vh); }
   .np-label{ font-size:10px; letter-spacing:0.2em; text-transform:uppercase; color:var(--dim); margin-bottom:10px; }
   .np-title{ font-family:'Syne', sans-serif; font-size:clamp(18px,1.6vw,24px); font-weight:700; margin-bottom:4px; }
   .np-sub{ font-size:12px; color:var(--dim); margin-bottom:16px; }
   .np-controls{ display:flex; align-items:center; gap:14px; }
   .play-btn{
     width:38px; height:38px; border-radius:50%; border:1px solid rgba(255,255,255,0.3);
-    background:transparent; color:var(--fg); display:flex; align-items:center; justify-content:center;
+    background:transparent; background-color:transparent; background-image:none;
+    color:var(--fg); display:flex; align-items:center; justify-content:center;
     cursor:auto; font-size:14px; transition:background .2s, border-color .2s;
+    appearance:none; -webkit-appearance:none; -moz-appearance:none;
+    outline:none; -webkit-tap-highlight-color:transparent;
+    box-shadow:none; -webkit-box-shadow:none;
+    padding:0; margin:0; font-family:inherit;
   }
+  .play-btn:focus, .play-btn:active{ outline:none; box-shadow:none; background-color:transparent; }
   .play-btn:hover{ background:rgba(255,255,255,0.08); border-color:var(--fg); }
   .np-time{ font-size:11px; color:var(--dim); font-variant-numeric:tabular-nums; }
 
@@ -141,7 +147,7 @@
   }
 
   .playhead{
-    width:180px; height:6px; border-radius:3px; overflow:hidden;
+    flex:1; min-width:60px; height:6px; border-radius:3px; overflow:hidden;
     background:rgba(255,255,255,0.18);
     backdrop-filter:blur(6px); -webkit-backdrop-filter:blur(6px);
     pointer-events:auto; cursor:auto; align-self:center;
@@ -174,8 +180,10 @@
       <div class="np-title" id="npTitle">—</div>
       <div class="np-sub" id="npSub">—</div>
       <div class="np-controls">
-        <button class="play-btn" id="playBtn">▶</button>
-        <div class="np-time"><span id="npCurrent">0:00</span> / <span id="npDuration">0:00</span></div>
+        <div class="play-btn" id="playBtn" role="button" tabindex="0" aria-label="Play or pause">▶</div>
+        <div class="playhead" id="playhead">
+          <div class="playhead-fill" id="playheadFill"></div>
+        </div>
       </div>
     </div>
   </main>
@@ -185,9 +193,6 @@
 <input type="file" id="fileInput" accept="audio/*">
 
 <div class="bottom-right-actions">
-  <div class="playhead" id="playhead">
-    <div class="playhead-fill" id="playheadFill"></div>
-  </div>
   <a class="toggle-adjuster-btn" id="subscribeBtn" href="https://mailchi.mp/511c6f8218b7/subscribe" target="_blank" rel="noopener noreferrer">Subscribe</a>
   <a class="toggle-adjuster-btn" id="toggleAdjusterBtn" href="https://soundcloud.com/aquasonic-522858057" target="_blank" rel="noopener noreferrer">SoundCloud</a>
 </div>
@@ -543,7 +548,7 @@ class App {
     this.gradientBackground.update(delta);
     // audio-reactive modulation
     const u = this.gradientBackground.uniforms;
-    u.uSpeed.value = this.baseSpeed + smoothed.bass * 2.2;
+    u.uSpeed.value = Math.min(1.0, this.baseSpeed + smoothed.bass * 0.6);
     u.uIntensity.value = this.baseIntensity + smoothed.mid * 0.9;
     u.uGrainIntensity.value = this.baseGrain + smoothed.treble * 0.35;
   }
@@ -634,8 +639,6 @@ const roster = document.getElementById('roster');
 const nowPlaying = document.getElementById('nowPlaying');
 const npTitle = document.getElementById('npTitle');
 const npSub = document.getElementById('npSub');
-const npCurrent = document.getElementById('npCurrent');
-const npDuration = document.getElementById('npDuration');
 const playhead = document.getElementById('playhead');
 const playheadFill = document.getElementById('playheadFill');
 const playBtn = document.getElementById('playBtn');
@@ -815,6 +818,9 @@ playBtn.addEventListener('click', ()=>{
   if(player.paused){ player.play(); playBtn.textContent='⏸'; statusDot.classList.add('live'); statusText.textContent='Live'; }
   else { player.pause(); playBtn.textContent='▶'; statusDot.classList.remove('live'); statusText.textContent='Paused'; }
 });
+playBtn.addEventListener('keydown', (e)=>{
+  if (e.key === 'Enter' || e.key === ' '){ e.preventDefault(); playBtn.click(); }
+});
 player.addEventListener('ended', ()=>{
   playBtn.textContent = '▶'; statusDot.classList.remove('live'); statusText.textContent = 'Idle';
   statusSub.textContent = '';
@@ -822,8 +828,6 @@ player.addEventListener('ended', ()=>{
 });
 function fmt(t){ if(!isFinite(t)) return '0:00'; const m=Math.floor(t/60), s=Math.floor(t%60); return m+':'+String(s).padStart(2,'0'); }
 player.addEventListener('timeupdate', ()=>{
-  npCurrent.textContent = fmt(player.currentTime);
-  npDuration.textContent = fmt(player.duration);
   if (isFinite(player.duration) && player.duration > 0) {
     playheadFill.style.width = (player.currentTime / player.duration * 100) + '%';
   }
