@@ -99,6 +99,17 @@
   }
   .play-btn:focus, .play-btn:active{ outline:none; box-shadow:none; background-color:transparent; }
   .play-btn:hover{ background:rgba(255,255,255,0.08); border-color:var(--fg); }
+  .play-btn .icon-play{
+    width:0; height:0; margin-left:2px;
+    border-top:6px solid transparent; border-bottom:6px solid transparent;
+    border-left:10px solid var(--fg);
+  }
+  .play-btn .icon-pause{ display:none; gap:3px; }
+  .play-btn .icon-pause::before, .play-btn .icon-pause::after{
+    content:''; width:3px; height:12px; background:var(--fg); display:block;
+  }
+  .play-btn.playing .icon-play{ display:none; }
+  .play-btn.playing .icon-pause{ display:flex; }
   .np-time{ font-size:11px; color:var(--dim); font-variant-numeric:tabular-nums; }
 
   input[type=file]{ display:none; }
@@ -150,7 +161,8 @@
 
   @media (max-width:720px){
     main{ flex-direction:column; align-items:flex-start; gap:24px; }
-    .now-playing{ max-width:90vw; }
+    .now-playing{ max-width:90vw; margin-bottom:5rem; }
+    .bottom-right-actions{ right:1rem; bottom:1rem; }
   }
 
   .playhead{
@@ -187,7 +199,10 @@
       <div class="np-title" id="npTitle">—</div>
       <div class="np-sub" id="npSub">—</div>
       <div class="np-controls">
-        <div class="play-btn" id="playBtn" role="button" tabindex="0" aria-label="Play or pause">▶</div>
+        <div class="play-btn" id="playBtn" role="button" tabindex="0" aria-label="Play or pause">
+          <span class="icon-play"></span>
+          <span class="icon-pause"></span>
+        </div>
         <div class="playhead" id="playhead">
           <div class="playhead-fill" id="playheadFill"></div>
         </div>
@@ -604,6 +619,7 @@ const DJS = [
   { id:'kova', name:'Nema Hän',        genre:'Deep House',     c1:'#24e0c9', c2:'#0a4f47', c3:'#8ff5e8', src:'' },
   { id:'ren',  name:'Eva Loveless',  genre:'Ambient / IDM',  c1:'#7a5cff', c2:'#241a5e', c3:'#b8a8ff', src:'' },
   { id:'juno', name:'Currency Audio',genre:'UK Garage',      c1:'#ffb400', c2:'#5e4200', c3:'#ffd980', src:'' },
+  { id:'primo', name:'Primo',genre:'Genre',      c1:'#39d6ff', c2:'#0a3a4f', c3:'#a3ecff', src:'' },
 ];
 
 const player = document.getElementById('player');
@@ -781,7 +797,7 @@ function loadAndPlay(dj, src, card, fileName){
   nowPlaying.style.display = 'block';
   npTitle.textContent = dj.name;
   npSub.textContent = fileName ? fileName.replace(/\.[^/.]+$/,'') : '';
-  playBtn.textContent = '⏸';
+  playBtn.classList.add('playing');
   statusDot.classList.add('live');
   statusText.textContent = 'Live';
   statusSub.textContent = dj.name;
@@ -789,14 +805,14 @@ function loadAndPlay(dj, src, card, fileName){
 
 playBtn.addEventListener('click', ()=>{
   if(!player.src) return;
-  if(player.paused){ player.play(); playBtn.textContent='⏸'; statusDot.classList.add('live'); statusText.textContent='Live'; }
-  else { player.pause(); playBtn.textContent='▶'; statusDot.classList.remove('live'); statusText.textContent='Paused'; }
+  if(player.paused){ player.play(); playBtn.classList.add('playing'); statusDot.classList.add('live'); statusText.textContent='Live'; }
+  else { player.pause(); playBtn.classList.remove('playing'); statusDot.classList.remove('live'); statusText.textContent='Paused'; }
 });
 playBtn.addEventListener('keydown', (e)=>{
   if (e.key === 'Enter' || e.key === ' '){ e.preventDefault(); playBtn.click(); }
 });
 player.addEventListener('ended', ()=>{
-  playBtn.textContent = '▶'; statusDot.classList.remove('live'); statusText.textContent = 'Idle';
+  playBtn.classList.remove('playing'); statusDot.classList.remove('live'); statusText.textContent = 'Idle';
   statusSub.textContent = '';
   playheadFill.style.width = '0%';
 });
